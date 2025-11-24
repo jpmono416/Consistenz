@@ -1,8 +1,23 @@
-# Welcome to your Expo app 👋
+# Signoise
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Signal vs Noise inspired mobile task board built with Expo Router + Firebase. Signoise splits work into two live columns (Signal for high-impact, Noise for low-priority) and keeps a combined completion history plus lightweight insights.
 
-## Get started
+## Features
+
+- Email/password auth with Firebase Authentication
+- Real-time tasks synced per user in Cloud Firestore
+- Dual-column board with quick actions (complete, delete, swap priority)
+- Completion history that merges Signal/Noise items with visual badges
+- Stats view with focus score, backlog count, and a rolling 7-day completion graph
+
+## Tech stack
+
+- Expo 54 (React Native 0.81) + Expo Router tabs
+- Firebase Authentication & Firestore
+- TypeScript with module aliases (`@/* → src/*`)
+- Vector icons from `@expo/vector-icons`
+
+## Getting started
 
 1. Install dependencies
 
@@ -10,41 +25,52 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    npm install
    ```
 
-2. Start the app
+2. Configure Firebase (see next section)
+
+3. Start the dev server
 
    ```bash
    npx expo start
    ```
 
-In the output, you'll find options to open the app in a
+   Use any of: Android emulator, iOS simulator (macOS), or Expo Go on device.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## Firebase configuration
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+Create a Firebase project with Authentication (Email/Password enabled) and Firestore (native mode). Copy your web app credentials into a `.env.local` file based on `env.template`:
 
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```
+EXPO_PUBLIC_FIREBASE_API_KEY=...
+EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=...
+EXPO_PUBLIC_FIREBASE_PROJECT_ID=...
+EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=...
+EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
+EXPO_PUBLIC_FIREBASE_APP_ID=...
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Expo automatically inlines variables prefixed with `EXPO_PUBLIC_` into the client bundle.
 
-## Learn more
+## Project layout
 
-To learn more about developing your project with Expo, look at the following resources:
+- `app/(auth)` – login & signup flow
+- `app/(app)` – authenticated tab navigator (board, history, stats)
+- `src/context` – Auth + Task providers
+- `src/components` – UI primitives (columns, cards, composer)
+- `src/lib/firebase.ts` – Firebase bootstrap
+- `src/theme` – palette shared across screens
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Helpful scripts
 
-## Join the community
+| Command          | Description                              |
+| ---------------- | ---------------------------------------- |
+| `npm run start`  | Launch Expo dev server                   |
+| `npm run android`| Start + open on Android emulator/device  |
+| `npm run ios`    | Start + open on iOS simulator (mac only) |
+| `npm run web`    | Run in Expo Web                          |
+| `npm run lint`   | Check ESLint issues                      |
 
-Join our community of developers creating universal apps.
+## Next steps
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- Harden validation (min password length, better error copy)
+- Add stats filters (by month, by priority)
+- Add push notifications or reminders via Expo Notifications
