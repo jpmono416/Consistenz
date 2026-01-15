@@ -1,13 +1,4 @@
 import {
-  PropsWithChildren,
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
-import {
   Timestamp,
   addDoc,
   collection,
@@ -21,6 +12,15 @@ import {
   type DocumentData,
   type QueryDocumentSnapshot,
 } from 'firebase/firestore';
+import {
+  PropsWithChildren,
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 
 import { db } from '@/lib/firebase';
 import { Priority, Task, TaskInput } from '@/types/task';
@@ -83,6 +83,7 @@ export const TaskProvider = ({ children }: PropsWithChildren) => {
       (error) => {
         console.error('Task listener error', error);
         setLoading(false);
+        setReady(true); // Mark as ready even on error so components don't wait forever
       }
     );
 
@@ -107,12 +108,19 @@ export const TaskProvider = ({ children }: PropsWithChildren) => {
   );
 
   const addTask = useCallback(async (input: TaskInput) => {
-    await addDoc(collectionRef(), {
-      ...input,
+    const payload: Record<string, unknown> = {
+      title: input.title,
+      priority: input.priority,
       completed: false,
       createdAt: serverTimestamp(),
       completedAt: null,
-    });
+    };
+
+    if (input.notes?.trim()) {
+      payload.notes = input.notes.trim();
+    }
+
+    await addDoc(collectionRef(), payload);
   }, [collectionRef]);
 
   const togglePriority = useCallback(async (taskId: string) => {

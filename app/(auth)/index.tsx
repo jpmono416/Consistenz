@@ -39,9 +39,9 @@ export default function AuthScreen() {
       <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
         <View style={{ flex: 1, justifyContent: 'center', padding: 24, gap: 32 }}>
           <View>
-            <Text style={{ color: palette.signal, fontSize: 32, fontWeight: '800' }}>Signoise</Text>
+            <Text style={{ color: palette.signal, fontSize: 32, fontWeight: '800' }}>Consistenz</Text>
             <Text style={{ color: palette.textSecondary, marginTop: 8 }}>
-              Split what matters (Signal) from the Noise and keep momentum.
+              Consistency is the key to success.
             </Text>
           </View>
 

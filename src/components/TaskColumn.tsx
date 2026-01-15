@@ -1,4 +1,4 @@
-import { Text, View } from 'react-native';
+import { Text, View, Pressable } from 'react-native';
 
 import { palette } from '@/theme';
 import { Task } from '@/types/task';
@@ -12,6 +12,11 @@ interface TaskColumnProps {
   onTogglePriority: (taskId: string) => void;
   onToggleCompleted: (taskId: string) => void;
   onDelete: (taskId: string) => void;
+  onTaskLongPress?: (taskId: string) => void;
+  onEmptyPress?: () => void;
+  onDragStart?: (taskId: string, x: number, y: number) => void;
+  onDragUpdate?: (x: number, y: number) => void;
+  onDragEnd?: () => void;
 }
 
 export function TaskColumn({
@@ -22,6 +27,11 @@ export function TaskColumn({
   onTogglePriority,
   onToggleCompleted,
   onDelete,
+  onTaskLongPress,
+  onEmptyPress,
+  onDragStart,
+  onDragUpdate,
+  onDragEnd,
 }: TaskColumnProps) {
   return (
     <View style={{ flex: 1, gap: 12 }}>
@@ -53,7 +63,8 @@ export function TaskColumn({
       </View>
 
       {tasks.length === 0 ? (
-        <View
+        <Pressable
+          onPress={onEmptyPress}
           style={{
             borderWidth: 1,
             borderColor: palette.border,
@@ -67,7 +78,7 @@ export function TaskColumn({
           }}
         >
           <Text style={{ color: palette.textSecondary, textAlign: 'center' }}>{emptyCopy}</Text>
-        </View>
+        </Pressable>
       ) : (
         <View style={{ gap: 12 }}>
           {tasks.map((item) => (
@@ -77,6 +88,10 @@ export function TaskColumn({
               onTogglePriority={() => onTogglePriority(item.id)}
               onToggleCompleted={() => onToggleCompleted(item.id)}
               onDelete={() => onDelete(item.id)}
+              onLongPress={onTaskLongPress ? () => onTaskLongPress(item.id) : undefined}
+              onDragStart={onDragStart}
+              onDragUpdate={onDragUpdate}
+              onDragEnd={onDragEnd}
             />
           ))}
         </View>
@@ -84,4 +99,3 @@ export function TaskColumn({
     </View>
   );
 }
-

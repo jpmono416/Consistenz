@@ -1,0 +1,12 @@
+diff --git a/node_modules/react-native-svg/android/src/main/java/com/horcrux/svg/VirtualView.java b/node_modules/react-native-svg/android/src/main/java/com/horcrux/svg/VirtualView.java
+index 815b236..204b3ab 100644
+--- a/node_modules/react-native-svg/android/src/main/java/com/horcrux/svg/VirtualView.java
++++ b/node_modules/react-native-svg/android/src/main/java/com/horcrux/svg/VirtualView.java
+@@ -102,6 +102,7 @@ public abstract class VirtualView extends ReactViewGroup {
+   ArrayList<PathElement> elements;
+   PointerEvents mPointerEvents;
+ 
++  @Override
+   public void setPointerEvents(PointerEvents pointerEvents) {
+     mPointerEvents = pointerEvents;
+   }

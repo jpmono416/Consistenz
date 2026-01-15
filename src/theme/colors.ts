@@ -1,16 +1,18 @@
 export const palette = {
-  background: '#0B1120',
-  surface: '#141C2C',
-  elevated: '#1E293B',
-  border: '#1F2937',
-  signal: '#38BDF8',
-  noise: '#A5B4FC',
-  accent: '#F97316',
-  success: '#34D399',
+  background: '#222', // Dark background from habit-tracker
+  surface: '#333', // Darker surface
+  elevated: '#444', // Elevated elements
+  border: '#555', // Border color
+  signal: '#38BDF8', // Keep signal blue
+  noise: '#A5B4FC', // Keep noise purple
+  accent: '#FCC737', // Yellow from gradient
+  gradientStart: '#E73879', // Pink from gradient
+  gradientEnd: '#FCC737', // Yellow from gradient
+  success: '#4CAF50', // Green for tasks button
   danger: '#FB7185',
-  textPrimary: '#F8FAFC',
-  textSecondary: '#94A3B8',
-  muted: '#475569',
+  textPrimary: '#FFFFFF',
+  textSecondary: '#CCCCCC',
+  muted: '#888888',
 };
 
 export const shadows = {

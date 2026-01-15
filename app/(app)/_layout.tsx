@@ -1,5 +1,5 @@
-import { Tabs } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
+import { Tabs } from 'expo-router';
 
 import { palette } from '@/theme';
 
@@ -38,6 +38,31 @@ export default function AppLayout() {
         options={{
           title: 'Stats',
           tabBarIcon: ({ color, size }) => <Feather name="bar-chart-2" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="habit-tracker"
+        options={{
+          title: 'Habits',
+          tabBarIcon: ({ color, size }) => <Feather name="activity" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="manage-habits"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="radial"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          href: null, // Hide from tab bar
         }}
       />
     </Tabs>

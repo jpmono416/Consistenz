@@ -1,18 +1,58 @@
-import { useState } from 'react';
-import { ScrollView, Text, View, SafeAreaView, Pressable, useWindowDimensions } from 'react-native';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { ScrollView, Text, View, SafeAreaView, Pressable, useWindowDimensions, FlatList, Dimensions, StyleSheet, Modal } from 'react-native';
+import { useRouter } from 'expo-router';
+import { format, isToday } from 'date-fns';
+import Svg, { Defs, LinearGradient as SvgGradient, Stop, Rect, Path } from 'react-native-svg';
+import { LinearGradient } from 'expo-linear-gradient';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { TaskColumn } from '@/components/TaskColumn';
 import { TaskComposer } from '@/components/TaskComposer';
 import { useAuth } from '@/context/AuthContext';
 import { useTasks } from '@/context/TaskContext';
-import { palette } from '@/theme';
+import { useHabits } from '@/context/HabitContext';
+import { upsertHabitTap } from '@/utils/storage';
+import { Priority } from '@/types/task';
+import { palette, shadows } from '@/theme';
+
+const numColumns = 2;
+const WEEKDAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export default function HomeScreen() {
+  const router = useRouter();
   const { user, signOutUser } = useAuth();
   const { signalTasks, noiseTasks, addTask, toggleCompleted, togglePriority, deleteTask } = useTasks();
+  const { habits, habitHistory, refreshHistory } = useHabits();
   const [signingOut, setSigningOut] = useState(false);
+  const [showTaskComposer, setShowTaskComposer] = useState(false);
+  const [taskComposerPriority, setTaskComposerPriority] = useState<Priority>('signal');
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
+  const [dragStartPosition, setDragStartPosition] = useState<{ x: number; y: number; taskId: string } | null>(null);
+  const [hoveredColumn, setHoveredColumn] = useState<Priority | null>(null);
+  const signalColumnRef = useRef<View>(null);
+  const noiseColumnRef = useRef<View>(null);
+  const safeAreaRef = useRef<View>(null);
+  const [safeAreaOffset, setSafeAreaOffset] = useState({ x: 0, y: 0 });
   const { width } = useWindowDimensions();
   const stackColumns = width < 720;
+  const habitSize = width / numColumns - 24;
+
+  // Get habits for selected date with tap counts
+  const habitsForDate = useMemo(() => {
+    const dateKey = selectedDate.toISOString().slice(0, 10);
+    const dayRecord = habitHistory[dateKey] || {};
+
+    return habits
+      .filter(h => h.isActive) // Show all active habits, not filtered by schedule
+      .map(h => {
+        const rec = dayRecord[h.id];
+        const taps = typeof rec === 'number' ? rec : rec?.taps ?? 0;
+        return { ...h, tapsToday: taps };
+      })
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
+  }, [habits, habitHistory, selectedDate]);
 
   const handleSignOut = async () => {
     setSigningOut(true);
@@ -23,10 +63,214 @@ export default function HomeScreen() {
     }
   };
 
+  const handleHabitTap = useCallback(async (habitId: string) => {
+    await upsertHabitTap(habitId, selectedDate);
+    // Refresh history to get updated data
+    await refreshHistory();
+  }, [selectedDate, refreshHistory]);
+
+  // Date navigation
+  const handlePrevDay = () => {
+    setSelectedDate(d => {
+      const next = new Date(d);
+      next.setDate(d.getDate() - 1);
+      return next;
+    });
+  };
+
+  const handleNextDay = () => {
+    setSelectedDate(d => {
+      const next = new Date(d);
+      next.setDate(d.getDate() + 1);
+      return next;
+    });
+  };
+
+  const atToday = isToday(selectedDate);
+
+  // Handle drag and drop
+  const handleDragStart = useCallback((taskId: string, x: number, y: number) => {
+    // Measure SafeAreaView position to adjust coordinates
+    if (safeAreaRef.current) {
+      safeAreaRef.current.measureInWindow((sx, sy) => {
+        setSafeAreaOffset({ x: sx, y: sy });
+        setDraggedTaskId(taskId);
+        setDragStartPosition({ x, y, taskId });
+        setDragPosition({ x: x - sx, y: y - sy });
+      });
+    } else {
+      setDraggedTaskId(taskId);
+      setDragStartPosition({ x, y, taskId });
+      setDragPosition({ x, y });
+    }
+  }, []);
+
+  const handleDragUpdate = useCallback((x: number, y: number) => {
+    // Adjust for SafeAreaView offset
+    const adjustedX = x - safeAreaOffset.x;
+    const adjustedY = y - safeAreaOffset.y;
+    setDragPosition({ x: adjustedX, y: adjustedY });
+    
+    // Check which column we're hovering over using measureInWindow for absolute coordinates
+    if (signalColumnRef.current && noiseColumnRef.current) {
+      signalColumnRef.current.measureInWindow((px, py, width, height) => {
+        if (x >= px && x <= px + width && y >= py && y <= py + height) {
+          setHoveredColumn('signal');
+        } else {
+          noiseColumnRef.current?.measureInWindow((px2, py2, width2, height2) => {
+            if (x >= px2 && x <= px2 + width2 && y >= py2 && y <= py2 + height2) {
+              setHoveredColumn('noise');
+            } else {
+              setHoveredColumn(null);
+            }
+          });
+        }
+      });
+    }
+  }, [safeAreaOffset]);
+
+  const handleDragEnd = useCallback(async () => {
+    if (!draggedTaskId || !hoveredColumn) {
+      setDraggedTaskId(null);
+      setDragPosition(null);
+      setDragStartPosition(null);
+      setHoveredColumn(null);
+      return;
+    }
+    
+    const draggedTask = [...signalTasks, ...noiseTasks].find(t => t.id === draggedTaskId);
+    if (draggedTask && draggedTask.priority !== hoveredColumn) {
+      await togglePriority(draggedTaskId);
+    }
+    
+    setDraggedTaskId(null);
+    setDragPosition(null);
+    setDragStartPosition(null);
+    setHoveredColumn(null);
+  }, [draggedTaskId, hoveredColumn, signalTasks, noiseTasks, togglePriority]);
+
+  const cancelDrag = useCallback(() => {
+    setDraggedTaskId(null);
+    setDragPosition(null);
+    setDragStartPosition(null);
+    setHoveredColumn(null);
+  }, []);
+
+  const openTaskComposer = useCallback((priority: Priority = 'signal') => {
+    setTaskComposerPriority(priority);
+    setShowTaskComposer(true);
+  }, []);
+
+  // Special items for habit grid
+  const addHabitItem = { id: 'add-habit', isAddButton: true };
+  const tasksItem = { id: 'tasks-item', isTasksButton: true };
+
+  const renderHabitItem = ({ item }: { item: typeof habitsForDate[0] | typeof addHabitItem | typeof tasksItem }) => {
+    const isAdd = 'isAddButton' in item;
+    const isTasks = 'isTasksButton' in item;
+
+    if (isAdd && atToday) {
+      return (
+        <Pressable style={[styles.habitBox, { width: habitSize, height: habitSize }]} onPress={() => router.push('/manage-habits')}>
+          <Svg width={habitSize} height={habitSize} style={styles.addButtonSvg}>
+            <Defs>
+              <SvgGradient id="gradient" x1="0" y1="0" x2="1" y2="1">
+                <Stop offset="0" stopColor={palette.gradientStart} />
+                <Stop offset="1" stopColor={palette.gradientEnd} />
+              </SvgGradient>
+            </Defs>
+            <Rect
+              x="2"
+              y="2"
+              width={habitSize - 4}
+              height={habitSize - 4}
+              rx="10"
+              ry="10"
+              stroke="url(#gradient)"
+              strokeWidth="2"
+              fill="transparent"
+            />
+            <Path
+              d={`
+                M ${habitSize * 0.3},${habitSize * 0.47} 
+                h ${habitSize * 0.4} 
+                a 3,3 0 0 1 0,${habitSize * 0.06} 
+                h -${habitSize * 0.17}
+                v ${habitSize * 0.17}
+                a 3,3 0 0 1 -${habitSize * 0.06},0 
+                v -${habitSize * 0.17}
+                h -${habitSize * 0.17}
+                a 3,3 0 0 1 0,-${habitSize * 0.06} 
+                h ${habitSize * 0.17}
+                v -${habitSize * 0.17}
+                a 3,3 0 0 1 ${habitSize * 0.06},0 
+                v ${habitSize * 0.17}
+              `}
+              fill="url(#gradient)"
+            />
+          </Svg>
+        </Pressable>
+      );
+    }
+
+    if (isTasks && atToday) {
+      return (
+        <Pressable 
+          style={[styles.habitBox, { width: habitSize, height: habitSize }]} 
+          onPress={() => openTaskComposer()}
+        >
+          <Svg width={habitSize} height={habitSize} style={styles.addButtonSvg}>
+            <Defs>
+              <SvgGradient id="gradientTasks" x1="0" y1="0" x2="1" y2="1">
+                <Stop offset="0" stopColor="#4CAF50" />
+                <Stop offset="1" stopColor="#81C784" />
+              </SvgGradient>
+            </Defs>
+            <Rect
+              x="2"
+              y="2"
+              width={habitSize - 4}
+              height={habitSize - 4}
+              rx="10"
+              ry="10"
+              stroke="url(#gradientTasks)"
+              strokeWidth="2"
+              fill="transparent"
+            />
+          </Svg>
+          <Text style={[styles.emoji, { position: 'absolute', color: palette.success }]}>✅</Text>
+        </Pressable>
+      );
+    }
+
+    if (isAdd || isTasks) return null;
+
+    // Normal habit rendering
+    const ratio = item.tapsToday / item.tapsNeeded;
+    const filledHeight = habitSize * ratio;
+    return (
+      <Pressable
+        style={[styles.habitBox, { width: habitSize, height: habitSize, borderColor: item.color, borderWidth: 2 }]}
+        onPress={() => handleHabitTap(item.id)}
+      >
+        <View style={[styles.fill, { height: filledHeight, backgroundColor: item.color }]} />
+        <Text style={styles.emoji}>{item.emoji}</Text>
+        <Text style={styles.label}>{item.name}</Text>
+      </Pressable>
+    );
+  };
+
+  const habitData = atToday 
+    ? [...habitsForDate, addHabitItem, tasksItem]
+    : habitsForDate;
+
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+    <View ref={safeAreaRef} style={{ flex: 1 }}>
     <SafeAreaView style={{ flex: 1, backgroundColor: palette.background }}>
-      <ScrollView contentContainerStyle={{ padding: 20, gap: 24 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
+        {/* Header */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingBottom: 12 }}>
           <View>
             <Text style={{ color: palette.textSecondary, fontSize: 14 }}>Welcome back</Text>
             <Text style={{ color: palette.textPrimary, fontSize: 26, fontWeight: '800' }}>
@@ -49,30 +293,287 @@ export default function HomeScreen() {
           </Pressable>
         </View>
 
-        <TaskComposer onSubmit={addTask} />
+        {/* Date Navigation */}
+        <View style={styles.dateNavContainer}>
+          <Pressable onPress={handlePrevDay}>
+            <Text style={{ fontSize: 20, color: palette.textPrimary }}>◀️</Text>
+          </Pressable>
+          <Text style={styles.dateHeader}>
+            {format(selectedDate, "EEE, MMM d")}
+          </Text>
+          {atToday ? (
+            <Text style={{ fontSize: 20, color: palette.muted }}>▶️</Text>
+          ) : (
+            <Pressable onPress={handleNextDay}>
+              <Text style={{ fontSize: 20, color: palette.textPrimary }}>▶️</Text>
+            </Pressable>
+          )}
+          {!atToday && (
+            <Pressable onPress={() => setSelectedDate(new Date())} style={{ marginLeft: 8 }}>
+              <Text style={{ fontSize: 20, color: palette.textPrimary }}>⏩</Text>
+            </Pressable>
+          )}
+        </View>
 
-        <View style={{ flexDirection: stackColumns ? 'column' : 'row', gap: 16 }}>
-          <TaskColumn
-            title="Signal"
-            accentColor={palette.signal}
-            tasks={signalTasks}
-            emptyCopy="No signal tasks yet. Capture the most impactful thing you can do next."
-            onTogglePriority={togglePriority}
-            onToggleCompleted={toggleCompleted}
-            onDelete={deleteTask}
-          />
-          <TaskColumn
-            title="Noise"
-            accentColor={palette.noise}
-            tasks={noiseTasks}
-            emptyCopy="Noise tasks live here. Keep them around but stay focused on signal."
-            onTogglePriority={togglePriority}
-            onToggleCompleted={toggleCompleted}
-            onDelete={deleteTask}
-          />
+        {/* Habits Section */}
+        <View style={{ paddingHorizontal: 12, marginBottom: 24 }}>
+          {habitsForDate.length === 0 && !atToday ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No habit tracking data for this date.</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={habitData}
+              keyExtractor={(item) => 'id' in item ? item.id : 'special'}
+              numColumns={numColumns}
+              scrollEnabled={false}
+              renderItem={renderHabitItem}
+            />
+          )}
+        </View>
+
+        {/* Tasks Section */}
+        <View style={{ paddingHorizontal: 20, gap: 16 }}>
+          <View style={{ flexDirection: stackColumns ? 'column' : 'row', gap: 16 }}>
+            <View
+              ref={signalColumnRef}
+              style={{ 
+                flex: 1,
+                opacity: hoveredColumn === 'signal' ? 0.8 : 1, 
+                borderWidth: hoveredColumn === 'signal' ? 3 : 0, 
+                borderColor: palette.signal, 
+                borderRadius: 16, 
+                padding: hoveredColumn === 'signal' ? 4 : 0,
+                backgroundColor: hoveredColumn === 'signal' ? `${palette.signal}20` : 'transparent',
+              }}
+            >
+              <TaskColumn
+                title="Signal"
+                accentColor={palette.signal}
+                tasks={signalTasks.filter(t => t.id !== draggedTaskId)}
+                emptyCopy="No signal tasks yet. Capture the most impactful thing you can do next."
+                onTogglePriority={togglePriority}
+                onToggleCompleted={toggleCompleted}
+                onDelete={deleteTask}
+                onDragStart={handleDragStart}
+                onDragUpdate={handleDragUpdate}
+                onDragEnd={handleDragEnd}
+                onEmptyPress={() => {
+                  if (!draggedTaskId) {
+                    openTaskComposer('signal');
+                  }
+                }}
+              />
+            </View>
+            <View
+              ref={noiseColumnRef}
+              style={{ 
+                flex: 1,
+                opacity: hoveredColumn === 'noise' ? 0.8 : 1, 
+                borderWidth: hoveredColumn === 'noise' ? 3 : 0, 
+                borderColor: palette.noise, 
+                borderRadius: 16, 
+                padding: hoveredColumn === 'noise' ? 4 : 0,
+                backgroundColor: hoveredColumn === 'noise' ? `${palette.noise}20` : 'transparent',
+              }}
+            >
+              <TaskColumn
+                title="Noise"
+                accentColor={palette.noise}
+                tasks={noiseTasks.filter(t => t.id !== draggedTaskId)}
+                emptyCopy="Noise tasks live here. Keep them around but stay focused on signal."
+                onTogglePriority={togglePriority}
+                onToggleCompleted={toggleCompleted}
+                onDelete={deleteTask}
+                onDragStart={handleDragStart}
+                onDragUpdate={handleDragUpdate}
+                onDragEnd={handleDragEnd}
+                onEmptyPress={() => {
+                  if (!draggedTaskId) {
+                    openTaskComposer('noise');
+                  }
+                }}
+              />
+            </View>
+          </View>
+          
         </View>
       </ScrollView>
+
+      {/* Dragged task overlay - outside ScrollView for proper positioning */}
+      {draggedTaskId && dragPosition && dragStartPosition && (
+        <View
+          style={{
+            position: 'absolute',
+            left: dragPosition.x - 150,
+            top: dragPosition.y - 50,
+            zIndex: 1000,
+            width: 300,
+            pointerEvents: 'none',
+            elevation: 10,
+          }}
+        >
+          {(() => {
+            const draggedTask = [...signalTasks, ...noiseTasks].find(t => t.id === draggedTaskId);
+            if (!draggedTask) return null;
+            return (
+              <View
+                style={{
+                  backgroundColor: palette.elevated,
+                  borderRadius: 16,
+                  padding: 16,
+                  gap: 12,
+                  borderWidth: 2,
+                  borderColor: draggedTask.priority === 'signal' ? palette.signal : palette.noise,
+                  ...shadows.soft,
+                }}
+              >
+                <Text style={{ color: palette.textPrimary, fontSize: 16, fontWeight: '600' }}>
+                  {draggedTask.title}
+                </Text>
+                {draggedTask.notes ? (
+                  <Text style={{ color: palette.textSecondary, fontSize: 13, lineHeight: 18 }}>
+                    {draggedTask.notes}
+                  </Text>
+                ) : null}
+              </View>
+            );
+          })()}
+        </View>
+      )}
+
+      {/* Modal Task Composer */}
+      <Modal
+        visible={showTaskComposer}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowTaskComposer(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowTaskComposer(false)}
+        >
+          <Pressable
+            style={styles.modalContent}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <Text style={{ color: palette.textPrimary, fontSize: 20, fontWeight: '700' }}>New Task</Text>
+              <Pressable onPress={() => setShowTaskComposer(false)}>
+                <Text style={{ color: palette.textSecondary, fontSize: 24 }}>×</Text>
+              </Pressable>
+            </View>
+            <TaskComposer
+              initialPriority={taskComposerPriority}
+              onSubmit={async (data) => {
+                await addTask(data);
+                setShowTaskComposer(false);
+              }}
+            />
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Navigation FABs */}
+      <Pressable style={styles.fabLeft} onPress={() => router.push('/manage-habits')}>
+        <LinearGradient start={[0,0]} end={[1,1]} colors={[palette.gradientStart, palette.gradientEnd]} style={styles.fabGradient}>
+          <Text style={{ fontSize: 27, color: '#fff' }}>✏️</Text>
+        </LinearGradient>
+      </Pressable>
+      <Pressable style={styles.fabRight} onPress={() => router.push('/stats')}>
+        <LinearGradient start={[0,0]} end={[1,1]} colors={[palette.gradientStart, palette.gradientEnd]} style={styles.fabGradient}>
+          <Text style={{ fontSize: 27, color: '#fff' }}>📊</Text>
+        </LinearGradient>
+      </Pressable>
     </SafeAreaView>
+    </View>
+    </GestureHandlerRootView>
   );
 }
 
+const styles = StyleSheet.create({
+  dateNavContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 20,
+  },
+  dateHeader: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginHorizontal: 16,
+    color: palette.textPrimary,
+  },
+  habitBox: {
+    margin: 8,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  fill: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
+  emoji: {
+    fontSize: 36,
+    marginBottom: 6,
+  },
+  label: {
+    fontWeight: '600',
+    color: palette.textPrimary,
+    fontSize: 14,
+  },
+  addButtonSvg: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+  },
+  emptyContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  emptyText: {
+    color: palette.textSecondary,
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  fabLeft: {
+    position: 'absolute',
+    bottom: 30,
+    left: 30,
+    borderRadius: 30,
+    overflow: 'hidden',
+    padding: 0,
+  },
+  fabRight: {
+    position: 'absolute',
+    bottom: 30,
+    right: 30,
+    borderRadius: 30,
+    overflow: 'hidden',
+    padding: 0,
+  },
+  fabGradient: {
+    padding: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 30,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: palette.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: '80%',
+  },
+});

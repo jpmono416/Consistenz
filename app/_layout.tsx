@@ -1,26 +1,63 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useRef } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '../src/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { TaskProvider } from '@/context/TaskContext';
+import { HabitProvider } from '@/context/HabitContext';
 import { palette } from '@/theme';
+import { initializeNotifications, cancelAllNotifications, setupNotificationHandlers } from '@/utils/notifications';
 
 function Providers({ children }: { children: ReactNode }) {
   return (
     <AuthProvider>
-      <TaskProvider>{children}</TaskProvider>
+      <TaskProvider>
+        <HabitProvider>{children}</HabitProvider>
+      </TaskProvider>
     </AuthProvider>
   );
 }
 
 function RouterStack() {
-  const { authReady } = useAuth();
+  const { authReady, user } = useAuth();
   const colorScheme = useColorScheme();
+  const notificationCleanupRef = useRef<(() => void) | null>(null);
+
+  // Initialize notifications when user logs in
+  useEffect(() => {
+    if (user) {
+      initializeNotifications(user.uid).catch((error) => {
+        console.error('Error initializing notifications:', error);
+      });
+      
+      // Setup notification handlers
+      const cleanup = setupNotificationHandlers(user.uid);
+      notificationCleanupRef.current = cleanup;
+    } else {
+      // Cancel notifications when user logs out
+      cancelAllNotifications().catch((error) => {
+        console.error('Error canceling notifications:', error);
+      });
+      
+      // Cleanup notification handlers
+      if (notificationCleanupRef.current) {
+        notificationCleanupRef.current();
+        notificationCleanupRef.current = null;
+      }
+    }
+
+    return () => {
+      // Cleanup on unmount
+      if (notificationCleanupRef.current) {
+        notificationCleanupRef.current();
+        notificationCleanupRef.current = null;
+      }
+    };
+  }, [user]);
 
   if (!authReady) {
     return (
@@ -33,8 +70,11 @@ function RouterStack() {
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(app)" />
+        {user ? (
+          <Stack.Screen name="(app)" />
+        ) : (
+          <Stack.Screen name="(auth)" />
+        )}
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>

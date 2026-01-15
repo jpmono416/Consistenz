@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
 
 import { palette } from '@/theme';
@@ -6,6 +6,7 @@ import { Priority } from '@/types/task';
 
 interface TaskComposerProps {
   onSubmit: (data: { title: string; notes?: string; priority: Priority }) => Promise<void>;
+  initialPriority?: Priority;
 }
 
 const priorityOptions: { label: string; value: Priority }[] = [
@@ -13,11 +14,16 @@ const priorityOptions: { label: string; value: Priority }[] = [
   { label: 'Noise', value: 'noise' },
 ];
 
-export function TaskComposer({ onSubmit }: TaskComposerProps) {
+export function TaskComposer({ onSubmit, initialPriority = 'signal' }: TaskComposerProps) {
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
-  const [priority, setPriority] = useState<Priority>('signal');
+  const [priority, setPriority] = useState<Priority>(initialPriority);
   const [submitting, setSubmitting] = useState(false);
+
+  // Update priority when initialPriority changes
+  useEffect(() => {
+    setPriority(initialPriority);
+  }, [initialPriority]);
 
   const handleSubmit = async () => {
     if (!title.trim()) {

@@ -1,6 +1,6 @@
-# Signoise
+# Consistenz
 
-Signal vs Noise inspired mobile task board built with Expo Router + Firebase. Signoise splits work into two live columns (Signal for high-impact, Noise for low-priority) and keeps a combined completion history plus lightweight insights.
+Signal vs Noise inspired mobile task board built with Expo Router + Firebase. Consistenz splits work into two live columns (Signal for high-impact, Noise for low-priority) and keeps a combined completion history plus lightweight insights.
 
 ## Features
 
