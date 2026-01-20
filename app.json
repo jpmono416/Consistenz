@@ -1,17 +1,20 @@
 {
   "expo": {
-    "name": "Signoise",
-    "slug": "Signoise",
+    "owner": "jpmono416",
+    "name": "Consistenz",
+    "slug": "Consistenz",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "signoise",
+    "scheme": "consistenz",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.jpmono416.consistenz"
     },
     "android": {
+      "package": "com.jpmono416.consistenz",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -19,8 +22,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
-      "package": "com.jpmono416.consistenz"
+      "predictiveBackGestureEnabled": false
     },
     "web": {
       "output": "static",
@@ -57,8 +59,7 @@
       "router": {},
       "eas": {
         "projectId": "9a629298-338a-4b60-9b1a-fb5a6986bf1d"
-      }
-    },
-    "owner": "jpmono416"
+    }
+    }
   }
 }
