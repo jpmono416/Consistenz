@@ -26,7 +26,7 @@ jobs:
         run: npm install
 
       - name: Build static web
-        run: npx expo export:web
+        run: npx expo export --platform web
 
       - name: Deploy to gh-pages
         uses: peaceiris/actions-gh-pages@v4
