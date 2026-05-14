@@ -1,7 +1,7 @@
 import {useEffect, useState} from "react";
 import { Habit } from '@/utils/storage';
 import * as storage from '@/utils/storage';
-import {Button, FlatList, StyleSheet, Text, View} from "react-native";
+import {Alert, Button, FlatList, StyleSheet, Text, View} from "react-native";
 const Settings: React.FC = () => {
     const [habits, setHabits] = useState<Habit[]>([]);
 
@@ -10,7 +10,7 @@ const Settings: React.FC = () => {
     }, []);
 
     const placeholderAdd = () =>
-        alert('Add‑habit UI not implemented yet.');
+        Alert.alert('Coming soon', 'Add-habit UI not implemented yet.');
 
     const Item = ({ item }: { item: Habit }) => (
         <View style={styles.item}>

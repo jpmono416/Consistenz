@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { ScrollView, Text, View, SafeAreaView, Pressable, useWindowDimensions, FlatList, Dimensions, StyleSheet, Modal } from 'react-native';
+import { useState, useCallback, useMemo, useRef } from 'react';
+import { ScrollView, Text, View, SafeAreaView, Pressable, useWindowDimensions, FlatList, StyleSheet, Modal } from 'react-native';
 import { useRouter } from 'expo-router';
 import { format, isToday } from 'date-fns';
 import Svg, { Defs, LinearGradient as SvgGradient, Stop, Rect, Path } from 'react-native-svg';
@@ -16,7 +16,6 @@ import { Priority } from '@/types/task';
 import { palette, shadows } from '@/theme';
 
 const numColumns = 2;
-const WEEKDAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -29,12 +28,11 @@ export default function HomeScreen() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
-  const [dragStartPosition, setDragStartPosition] = useState<{ x: number; y: number; taskId: string } | null>(null);
   const [hoveredColumn, setHoveredColumn] = useState<Priority | null>(null);
   const signalColumnRef = useRef<View>(null);
   const noiseColumnRef = useRef<View>(null);
-  const safeAreaRef = useRef<View>(null);
-  const [safeAreaOffset, setSafeAreaOffset] = useState({ x: 0, y: 0 });
+  const rootRef = useRef<View>(null);
+  const rootOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const { width } = useWindowDimensions();
   const stackColumns = width < 720;
   const habitSize = width / numColumns - 24;
@@ -88,73 +86,66 @@ export default function HomeScreen() {
 
   const atToday = isToday(selectedDate);
 
-  // Handle drag and drop
-  const handleDragStart = useCallback((taskId: string, x: number, y: number) => {
-    // Measure SafeAreaView position to adjust coordinates
-    if (safeAreaRef.current) {
-      safeAreaRef.current.measureInWindow((sx, sy) => {
-        setSafeAreaOffset({ x: sx, y: sy });
-        setDraggedTaskId(taskId);
-        setDragStartPosition({ x, y, taskId });
-        setDragPosition({ x: x - sx, y: y - sy });
-      });
-    } else {
-      setDraggedTaskId(taskId);
-      setDragStartPosition({ x, y, taskId });
-      setDragPosition({ x, y });
-    }
+  // Drag-and-drop handlers. All coordinates passed in are window-absolute
+  // coordinates coming from the Pan gesture's absoluteX/absoluteY, so the
+  // overlay can be positioned correctly regardless of safe-area insets, tabs
+  // or scroll position.
+  const measureRootOffset = useCallback(() => {
+    rootRef.current?.measureInWindow((x, y) => {
+      rootOffsetRef.current = { x, y };
+    });
   }, []);
+
+  const handleDragStart = useCallback(
+    (taskId: string, x: number, y: number) => {
+      measureRootOffset();
+      const { x: ox, y: oy } = rootOffsetRef.current;
+      setDraggedTaskId(taskId);
+      setDragPosition({ x: x - ox, y: y - oy });
+    },
+    [measureRootOffset]
+  );
 
   const handleDragUpdate = useCallback((x: number, y: number) => {
-    // Adjust for SafeAreaView offset
-    const adjustedX = x - safeAreaOffset.x;
-    const adjustedY = y - safeAreaOffset.y;
-    setDragPosition({ x: adjustedX, y: adjustedY });
-    
-    // Check which column we're hovering over using measureInWindow for absolute coordinates
-    if (signalColumnRef.current && noiseColumnRef.current) {
-      signalColumnRef.current.measureInWindow((px, py, width, height) => {
-        if (x >= px && x <= px + width && y >= py && y <= py + height) {
-          setHoveredColumn('signal');
+    const { x: ox, y: oy } = rootOffsetRef.current;
+    setDragPosition({ x: x - ox, y: y - oy });
+
+    // Hit-test against the columns. measureInWindow is JS-side so this is safe.
+    signalColumnRef.current?.measureInWindow((sx, sy, sw, sh) => {
+      if (x >= sx && x <= sx + sw && y >= sy && y <= sy + sh) {
+        setHoveredColumn('signal');
+        return;
+      }
+      noiseColumnRef.current?.measureInWindow((nx, ny, nw, nh) => {
+        if (x >= nx && x <= nx + nw && y >= ny && y <= ny + nh) {
+          setHoveredColumn('noise');
         } else {
-          noiseColumnRef.current?.measureInWindow((px2, py2, width2, height2) => {
-            if (x >= px2 && x <= px2 + width2 && y >= py2 && y <= py2 + height2) {
-              setHoveredColumn('noise');
-            } else {
-              setHoveredColumn(null);
-            }
-          });
+          setHoveredColumn(null);
         }
       });
-    }
-  }, [safeAreaOffset]);
+    });
+  }, []);
 
   const handleDragEnd = useCallback(async () => {
-    if (!draggedTaskId || !hoveredColumn) {
-      setDraggedTaskId(null);
-      setDragPosition(null);
-      setDragStartPosition(null);
-      setHoveredColumn(null);
-      return;
-    }
-    
-    const draggedTask = [...signalTasks, ...noiseTasks].find(t => t.id === draggedTaskId);
-    if (draggedTask && draggedTask.priority !== hoveredColumn) {
-      await togglePriority(draggedTaskId);
-    }
-    
+    // Snapshot then immediately reset visual state so the card cannot get
+    // stuck "floating" on web if any of the awaits below fail.
+    const taskId = draggedTaskId;
+    const target = hoveredColumn;
     setDraggedTaskId(null);
     setDragPosition(null);
-    setDragStartPosition(null);
     setHoveredColumn(null);
-  }, [draggedTaskId, hoveredColumn, signalTasks, noiseTasks, togglePriority]);
 
-  const cancelDrag = useCallback(() => {
-    setDraggedTaskId(null);
-    setDragPosition(null);
-    setDragStartPosition(null);
-    setHoveredColumn(null);
-  }, []);
+    if (!taskId || !target) return;
+
+    const draggedTask = [...signalTasks, ...noiseTasks].find((t) => t.id === taskId);
+    if (draggedTask && draggedTask.priority !== target) {
+      try {
+        await togglePriority(taskId);
+      } catch (err) {
+        console.error('Failed to swap task priority:', err);
+      }
+    }
+  }, [draggedTaskId, hoveredColumn, signalTasks, noiseTasks, togglePriority]);
 
   const openTaskComposer = useCallback((priority: Priority = 'signal') => {
     setTaskComposerPriority(priority);
@@ -266,7 +257,7 @@ export default function HomeScreen() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-    <View ref={safeAreaRef} style={{ flex: 1 }}>
+    <View ref={rootRef} style={{ flex: 1 }} onLayout={measureRootOffset}>
     <SafeAreaView style={{ flex: 1, backgroundColor: palette.background }}>
       <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
         {/* Header */}
@@ -401,15 +392,15 @@ export default function HomeScreen() {
       </ScrollView>
 
       {/* Dragged task overlay - outside ScrollView for proper positioning */}
-      {draggedTaskId && dragPosition && dragStartPosition && (
+      {draggedTaskId && dragPosition && (
         <View
+          pointerEvents="none"
           style={{
             position: 'absolute',
             left: dragPosition.x - 150,
             top: dragPosition.y - 50,
             zIndex: 1000,
             width: 300,
-            pointerEvents: 'none',
             elevation: 10,
           }}
         >

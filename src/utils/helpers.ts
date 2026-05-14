@@ -23,28 +23,33 @@ export interface MonthDetails {
     getDayName: (dayOfMonth: number) => string;
 }
 
-// Predefined colors for the color picker
-export const enum COLORS {
-    Blue = "#2196f3", // blue
-    Red = "#f44336", // red
-    Green = "#4caf50", // green
-    Orange = "#ff9800", // orange
-    Purple = "#9c27b0", // purple
-    Brown = "#795548", // brown
-    Gray = "#607d8b", // gray
-    Pink = "#e91e63", // pink
-    Teal = "#009688", // teal
+// Predefined colors for the color picker.
+// IMPORTANT: this must be a regular object (or non-const enum) — the values
+// are iterated at runtime via `Object.entries(COLORS)` in HabitForm. A
+// `const enum` is inlined at compile time and would iterate as empty.
+export const COLORS = {
+    Blue: "#2196f3",
+    Red: "#f44336",
+    Green: "#4caf50",
+    Orange: "#ff9800",
+    Purple: "#9c27b0",
+    Brown: "#795548",
+    Gray: "#607d8b",
+    Pink: "#e91e63",
+    Teal: "#009688",
 
-    // Radial colors for habit statuses - these are used in helpers.getStatusColor
-    Missed = "#950101", // crimson - missed
-    Partial = "#E25E3E", // orange - partial
-    Done = "#89AC46", // lime - done
-    Extra = "#FCC737", // yellow - extra
+    // Radial colors for habit statuses - used by helpers.getStatusColor
+    Missed: "#950101",
+    Partial: "#E25E3E",
+    Done: "#89AC46",
+    Extra: "#FCC737",
 
     // Default colors for UI elements (not habit colours)
-    DefaultBlack = '#FFFFFF19',
-    NotNeeded = '#404258', // grey uncompleted non-required habits
-}
+    DefaultBlack: "#FFFFFF19",
+    NotNeeded: "#404258",
+} as const;
+
+export type ColorName = keyof typeof COLORS;
 
 /* ------------------------------------------------------------------ */
 /* ------------------------   IMPLEMENTATION   ---------------------- */

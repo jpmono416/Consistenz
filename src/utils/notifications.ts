@@ -9,7 +9,8 @@ import { loadHabitsFromFirestore, loadHistoryFromFirestore } from './firestore';
 // Configure notification behavior
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
   }),
@@ -22,6 +23,12 @@ const HABITS_NOTIFICATION_ID = 'daily-habits-7pm';
  * Request notification permissions
  */
 export async function requestNotificationPermissions(): Promise<boolean> {
+  // Scheduling/permissioning of local notifications is not supported on web
+  // and can throw at runtime. Bail out gracefully so logging in on web works.
+  if (Platform.OS === 'web') {
+    return false;
+  }
+
   try {
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
@@ -120,15 +127,7 @@ async function checkIncompleteHabitsToday(userId: string): Promise<number> {
  */
 export async function scheduleTasksNotification(userId: string): Promise<void> {
   try {
-    // Cancel existing notification if any
     await Notifications.cancelScheduledNotificationAsync(TASKS_NOTIFICATION_ID);
-
-    // Schedule daily notification at 3pm
-    const trigger = {
-      hour: 15, // 3pm
-      minute: 0,
-      repeats: true,
-    };
 
     await Notifications.scheduleNotificationAsync({
       identifier: TASKS_NOTIFICATION_ID,
@@ -137,7 +136,11 @@ export async function scheduleTasksNotification(userId: string): Promise<void> {
         body: 'You have uncompleted Signal tasks',
         data: { type: 'tasks', userId },
       },
-      trigger,
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DAILY,
+        hour: 15,
+        minute: 0,
+      },
     });
   } catch (error) {
     console.error('Error scheduling tasks notification:', error);
@@ -149,15 +152,7 @@ export async function scheduleTasksNotification(userId: string): Promise<void> {
  */
 export async function scheduleHabitsNotification(userId: string): Promise<void> {
   try {
-    // Cancel existing notification if any
     await Notifications.cancelScheduledNotificationAsync(HABITS_NOTIFICATION_ID);
-
-    // Schedule daily notification at 7pm
-    const trigger = {
-      hour: 19, // 7pm
-      minute: 0,
-      repeats: true,
-    };
 
     await Notifications.scheduleNotificationAsync({
       identifier: HABITS_NOTIFICATION_ID,
@@ -166,7 +161,11 @@ export async function scheduleHabitsNotification(userId: string): Promise<void> 
         body: 'You have habits to complete today',
         data: { type: 'habits', userId },
       },
-      trigger,
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DAILY,
+        hour: 19,
+        minute: 0,
+      },
     });
   } catch (error) {
     console.error('Error scheduling habits notification:', error);
@@ -177,6 +176,10 @@ export async function scheduleHabitsNotification(userId: string): Promise<void> 
  * Setup notification handlers that check data and update notifications
  */
 export function setupNotificationHandlers(userId: string): () => void {
+  if (Platform.OS === 'web') {
+    return () => {};
+  }
+
   const receivedSubscription = Notifications.addNotificationReceivedListener(
     async (notification) => {
       const { type } = notification.request.content.data as { type: string; userId: string };
@@ -247,7 +250,16 @@ export async function initializeNotifications(userId: string): Promise<void> {
  * Cancel all scheduled notifications
  */
 export async function cancelAllNotifications(): Promise<void> {
-  await Notifications.cancelScheduledNotificationAsync(TASKS_NOTIFICATION_ID);
-  await Notifications.cancelScheduledNotificationAsync(HABITS_NOTIFICATION_ID);
+  if (Platform.OS === 'web') return;
+  try {
+    await Notifications.cancelScheduledNotificationAsync(TASKS_NOTIFICATION_ID);
+  } catch {
+    // notification may not exist — safe to ignore
+  }
+  try {
+    await Notifications.cancelScheduledNotificationAsync(HABITS_NOTIFICATION_ID);
+  } catch {
+    // notification may not exist — safe to ignore
+  }
 }
 

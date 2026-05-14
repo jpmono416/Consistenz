@@ -67,20 +67,20 @@ export default function HabitForm({ initialHabit, onSubmit, submitButtonText }: 
   return (
     <View style={styles.container}>
       <Text style={styles.label}>Name:</Text>
-      <TextInput 
-        style={styles.input} 
-        placeholder="Enter habit name" 
-        value={name} 
-        onChangeText={setName} 
+      <TextInput
+        style={styles.input}
+        placeholder="Enter habit name"
+        value={name}
+        onChangeText={setName}
         placeholderTextColor="#888"
       />
 
       <Text style={styles.label}>Emoji:</Text>
-      <TextInput 
-        style={styles.input} 
-        placeholder="Choose an emoji" 
-        value={emoji} 
-        onChangeText={setEmoji} 
+      <TextInput
+        style={styles.input}
+        placeholder="Choose an emoji"
+        value={emoji}
+        onChangeText={setEmoji}
         placeholderTextColor="#888"
       />
 
@@ -90,11 +90,10 @@ export default function HabitForm({ initialHabit, onSubmit, submitButtonText }: 
           showsHorizontalScrollIndicator={false}
           style={styles.colorContainer}
       >
-        {colorOptions.map(([name, value]) => (
+        {colorOptions.map(([colorName, value]) => (
             <Pressable
-                key={name}
-                title={String(name)}               // hover tooltip on web
-                accessibilityLabel={String(name)}  // screen-reader on native
+                key={colorName}
+                accessibilityLabel={String(colorName)}
                 style={[
                   styles.colorCircle,
                   color === value && styles.selectedColor,

@@ -184,11 +184,6 @@ export const loadAllHabitData = async (): Promise<AllHabitData> => {
     }
 };
 
-export const saveAllHabitData = async (data: AllHabitData): Promise<void> => {
-    // This function is deprecated and only kept for backward compatibility
-    console.warn('saveAllHabitData is deprecated. Use saveHistoryToFirestore instead.');
-};
-
 /** Update (or create) a single day's status and persist the change */
 export const updateHabitStatus = async (
     monthKey: string,      // "YYYY‑MM"

@@ -97,8 +97,10 @@ export default function HomeScreen() {
     const addHabitItem = { id: 'add-habit', isAddButton: true, order: 10 };
     const todosItem = { id: 'todos-item', isTodosButton: true, order: 11 };
 
+    type HabitListItem = Habit | typeof addHabitItem | typeof todosItem;
+
     // Render function for items in the FlatList
-    const renderItem = ({ item }: { item: Habit | typeof addHabitItem }) => {
+    const renderItem = ({ item }: { item: HabitListItem }) => {
         // Special rendering for the "Add Habit" button
         const isAdd = 'isAddButton' in item;
         if (item.id === 'add-habit' && isToday(selectedDate)) {
@@ -171,20 +173,25 @@ export default function HomeScreen() {
                     <Text style={[styles.emoji, { position: 'absolute', color: '#4CAF50' }]}>✅</Text>
                 </Pressable>
             );
-        } else if(isAdd) { return null;}
+        } else if (isAdd || 'isTodosButton' in item) {
+            // Special items (add/todos buttons) only render when atToday is
+            // true — guard above. Anything else here is a no-op so we never
+            // attempt to read habit fields off the special items.
+            return null;
+        }
 
         // Normal habit rendering
-        const ratio = item.tapsToday / item.tapsNeeded;
+        const habit = item as Habit;
+        const ratio = habit.tapsToday / habit.tapsNeeded;
         const filledHeight = size * ratio;
         return (
             <Pressable
-                style={[styles.box, { width: size, height: size, borderColor: item.color, borderWidth: 2 }]}
-                onPress={() => handleTap(item.id)}
+                style={[styles.box, { width: size, height: size, borderColor: habit.color, borderWidth: 2 }]}
+                onPress={() => handleTap(habit.id)}
             >
-                {/* fill effect */}
-                <View style={[styles.fill, { height: filledHeight, backgroundColor: item.color }]} />
-                <Text style={styles.emoji}>{item.emoji}</Text>
-                <Text style={styles.label}>{item.name}</Text>
+                <View style={[styles.fill, { height: filledHeight, backgroundColor: habit.color }]} />
+                <Text style={styles.emoji}>{habit.emoji}</Text>
+                <Text style={styles.label}>{habit.name}</Text>
             </Pressable>
         );
 
@@ -220,13 +227,13 @@ export default function HomeScreen() {
                     <Text style={styles.emptyText}>There is no habit tracking data for this date.</Text>
                 </View>
             ) : (
-            <FlatList
+            <FlatList<HabitListItem>
                 data={
                   isToday(selectedDate)
                     ? [...habits.filter(h => isScheduledForToday(h)), addHabitItem, todosItem]
                     : habits
                 }
-                keyExtractor={(item) => 'id' in item ? item.id : 'add-habit'}
+                keyExtractor={(item) => item.id}
                 numColumns={numColumns}
                 nestedScrollEnabled
                 contentContainerStyle={{ paddingHorizontal: 12 }}

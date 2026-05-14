@@ -1,8 +1,13 @@
-import { memo, useState, useEffect, useRef } from 'react';
-import { Pressable, Text, View, Animated } from 'react-native';
+import { memo, useState, useEffect, useRef, useCallback } from 'react';
+import { Pressable, Text, View, Animated, Platform } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Reanimated, { runOnJS, useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import Reanimated, {
+  runOnJS,
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from 'react-native-reanimated';
 
 import { palette, shadows } from '@/theme';
 import { Task } from '@/types/task';
@@ -16,186 +21,123 @@ interface TaskCardProps {
   onDragStart?: (taskId: string, x: number, y: number) => void;
   onDragUpdate?: (x: number, y: number) => void;
   onDragEnd?: () => void;
-  isDragging?: boolean;
-  dragPosition?: { x: number; y: number };
 }
 
-export const TaskCard = memo(({ 
-  task, 
-  onTogglePriority, 
-  onToggleCompleted, 
-  onDelete, 
+export const TaskCard = memo(({
+  task,
+  onTogglePriority,
+  onToggleCompleted,
+  onDelete,
   onLongPress,
-              onDragStart,
-              onDragUpdate,
-              onDragEnd,
-              isDragging = false,
-              dragPosition,
+  onDragStart,
+  onDragUpdate,
+  onDragEnd,
 }: TaskCardProps) => {
   const [isDraggingLocal, setIsDraggingLocal] = useState(false);
-  const priorityColor = task.priority === 'signal' ? palette.signal : palette.noise;
   const [isCompleting, setIsCompleting] = useState(false);
+  const priorityColor = task.priority === 'signal' ? palette.signal : palette.noise;
+
+  // Animated.* values (RN core) used for the completion animation only.
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  
-  // Reanimated values for drag
-  const translateX = useSharedValue(0);
-  const translateY = useSharedValue(0);
+
+  // Reanimated shared values used for the press/drag scale + opacity feedback.
   const scale = useSharedValue(1);
   const opacity = useSharedValue(1);
 
   useEffect(() => {
-    if (isCompleting) {
-      // Animate to green and fade out
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(scaleAnim, {
-          toValue: 0.8,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        setIsCompleting(false);
-        fadeAnim.setValue(1);
-        scaleAnim.setValue(1);
-      });
-    }
+    if (!isCompleting) return;
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 2000,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 0.8,
+        duration: 2000,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setIsCompleting(false);
+      fadeAnim.setValue(1);
+      scaleAnim.setValue(1);
+    });
   }, [isCompleting, fadeAnim, scaleAnim]);
 
   const handlePress = () => {
-    if (!task.completed && !isCompleting && !isDragging) {
+    if (!task.completed && !isCompleting && !isDraggingLocal) {
       setIsCompleting(true);
-      // Wait a bit before calling the completion handler to show the animation
       setTimeout(() => {
         onToggleCompleted();
       }, 100);
     }
   };
 
-  const cardRef = useRef<View>(null);
-  const initialPositionRef = useRef<{ x: number; y: number } | null>(null);
-  
-  // Pan gesture for dragging
-  const panGesture = Gesture.Pan()
-    .onStart(() => {
+  // JS-thread handlers — these are the only place where we touch React state,
+  // refs and the parent callbacks. They are invoked from the gesture worklets
+  // via runOnJS so that everything works on iOS, Android and Web.
+  const handleDragStartJS = useCallback(
+    (absoluteX: number, absoluteY: number) => {
       setIsDraggingLocal(true);
-      if (cardRef.current && onDragStart) {
-        cardRef.current.measureInWindow((x, y, width, height) => {
-          // Store initial position (center of card)
-          const centerX = x + width / 2;
-          const centerY = y + height / 2;
-          initialPositionRef.current = { x: centerX, y: centerY };
-          onDragStart(task.id, centerX, centerY);
-        });
-      }
+      onDragStart?.(task.id, absoluteX, absoluteY);
+    },
+    [task.id, onDragStart]
+  );
+
+  const handleDragUpdateJS = useCallback(
+    (absoluteX: number, absoluteY: number) => {
+      onDragUpdate?.(absoluteX, absoluteY);
+    },
+    [onDragUpdate]
+  );
+
+  const handleDragEndJS = useCallback(() => {
+    setIsDraggingLocal(false);
+    onDragEnd?.();
+  }, [onDragEnd]);
+
+  // Require a short long-press before the drag activates. This prevents the
+  // pan gesture from intercepting normal taps on the card (which would break
+  // completion / swap / delete) and also makes the drag intent explicit.
+  const panGesture = Gesture.Pan()
+    .activateAfterLongPress(250)
+    .onStart((event) => {
+      'worklet';
       scale.value = withSpring(1.05);
-      opacity.value = 0.8;
+      opacity.value = withSpring(0.4);
+      runOnJS(handleDragStartJS)(event.absoluteX, event.absoluteY);
     })
-    .onUpdate((e) => {
-      // Calculate absolute position from initial position + translation
-      if (initialPositionRef.current && onDragUpdate) {
-        const absoluteX = initialPositionRef.current.x + e.translationX;
-        const absoluteY = initialPositionRef.current.y + e.translationY;
-        runOnJS(onDragUpdate)(absoluteX, absoluteY);
-      }
+    .onUpdate((event) => {
+      'worklet';
+      runOnJS(handleDragUpdateJS)(event.absoluteX, event.absoluteY);
     })
     .onEnd(() => {
-      setIsDraggingLocal(false);
-      translateX.value = withSpring(0);
-      translateY.value = withSpring(0);
+      'worklet';
       scale.value = withSpring(1);
       opacity.value = withSpring(1);
-      initialPositionRef.current = null;
-      if (onDragEnd) {
-        onDragEnd();
-      }
+    })
+    .onFinalize(() => {
+      // onFinalize fires on every termination path (end, cancel, fail), so this
+      // is where we guarantee the card opacity is restored on web/native.
+      'worklet';
+      scale.value = withSpring(1);
+      opacity.value = withSpring(1);
+      runOnJS(handleDragEndJS)();
     });
 
   const animatedStyle = useAnimatedStyle(() => {
-    // Don't transform the card during drag - keep it in place visually
-    // The overlay will follow the finger instead
-    if (isDragging || isDraggingLocal) {
-      return {
-        opacity: 0.3,
-      };
+    if (isDraggingLocal) {
+      return { opacity: 0.3, transform: [{ scale: 1 }] };
     }
     return {
-      transform: [
-        { scale: scale.value },
-      ],
       opacity: opacity.value,
+      transform: [{ scale: scale.value }],
     };
   });
 
   const backgroundColor = isCompleting ? palette.success : palette.elevated;
   const borderColor = isCompleting ? palette.success : palette.border;
-
-  // If being dragged externally (from parent), show at drag position
-  if (isDragging && dragPosition) {
-    return (
-      <Reanimated.View
-        style={[
-          {
-            position: 'absolute',
-            left: dragPosition.x,
-            top: dragPosition.y,
-            zIndex: 1000,
-            width: '100%',
-          },
-          animatedStyle,
-        ]}
-        pointerEvents="none"
-      >
-        <View
-          style={{
-            backgroundColor,
-            borderRadius: 16,
-            padding: 16,
-            gap: 12,
-            borderWidth: 1,
-            borderColor,
-            ...shadows.soft,
-          }}
-        >
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text
-              style={{
-                color: isCompleting ? palette.background : palette.textPrimary,
-                fontSize: 16,
-                fontWeight: '600',
-                flex: 1,
-              }}
-            >
-              {task.title}
-            </Text>
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 12,
-              }}
-            >
-              <MaterialCommunityIcons
-                name="swap-horizontal"
-                size={20}
-                color={isCompleting ? palette.background : priorityColor}
-              />
-              <Feather name="trash" size={18} color={isCompleting ? palette.background : palette.danger} />
-            </View>
-          </View>
-          {task.notes ? (
-            <Text style={{ color: isCompleting ? palette.background : palette.textSecondary, fontSize: 13, lineHeight: 18 }}>
-              {task.notes}
-            </Text>
-          ) : null}
-        </View>
-      </Reanimated.View>
-    );
-  }
 
   return (
     <Animated.View
@@ -205,13 +147,13 @@ export const TaskCard = memo(({
       }}
     >
       <GestureDetector gesture={panGesture}>
-        <Reanimated.View 
-          ref={cardRef}
-          style={animatedStyle}
-        >
+        <Reanimated.View style={animatedStyle}>
           <Pressable
             onPress={handlePress}
             onLongPress={onLongPress}
+            // Disable native press feedback while dragging so the press doesn't
+            // visually fight the drag overlay (especially on web).
+            disabled={isDraggingLocal}
             style={{
               backgroundColor,
               borderRadius: 16,
@@ -219,56 +161,59 @@ export const TaskCard = memo(({
               gap: 12,
               borderWidth: 1,
               borderColor,
+              // Hint the browser that this element will move - improves perf
+              // and avoids the "floating but unclickable" web glitch.
+              ...(Platform.OS === 'web' ? { userSelect: 'none' as const } : null),
               ...shadows.soft,
             }}
           >
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text
-            style={{
-              color: isCompleting ? palette.background : palette.textPrimary,
-              fontSize: 16,
-              fontWeight: '600',
-              flex: 1,
-            }}
-          >
-            {task.title}
-          </Text>
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 12,
-            }}
-          >
-            <Pressable
-              onPress={(e) => {
-                e.stopPropagation();
-                onTogglePriority();
-              }}
-              hitSlop={8}
-            >
-              <MaterialCommunityIcons
-                name="swap-horizontal"
-                size={20}
-                color={isCompleting ? palette.background : priorityColor}
-              />
-            </Pressable>
-            <Pressable
-              onPress={(e) => {
-                e.stopPropagation();
-                onDelete();
-              }}
-              hitSlop={8}
-            >
-              <Feather name="trash" size={18} color={isCompleting ? palette.background : palette.danger} />
-            </Pressable>
-          </View>
-        </View>
-        {task.notes ? (
-          <Text style={{ color: isCompleting ? palette.background : palette.textSecondary, fontSize: 13, lineHeight: 18 }}>
-            {task.notes}
-          </Text>
-        ) : null}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text
+                style={{
+                  color: isCompleting ? palette.background : palette.textPrimary,
+                  fontSize: 16,
+                  fontWeight: '600',
+                  flex: 1,
+                }}
+              >
+                {task.title}
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <Pressable
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    onTogglePriority();
+                  }}
+                  hitSlop={8}
+                >
+                  <MaterialCommunityIcons
+                    name="swap-horizontal"
+                    size={20}
+                    color={isCompleting ? palette.background : priorityColor}
+                  />
+                </Pressable>
+                <Pressable
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    onDelete();
+                  }}
+                  hitSlop={8}
+                >
+                  <Feather name="trash" size={18} color={isCompleting ? palette.background : palette.danger} />
+                </Pressable>
+              </View>
+            </View>
+            {task.notes ? (
+              <Text
+                style={{
+                  color: isCompleting ? palette.background : palette.textSecondary,
+                  fontSize: 13,
+                  lineHeight: 18,
+                }}
+              >
+                {task.notes}
+              </Text>
+            ) : null}
           </Pressable>
         </Reanimated.View>
       </GestureDetector>

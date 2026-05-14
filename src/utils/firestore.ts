@@ -8,10 +8,6 @@ import {
 import { Habit } from "./storage";
 import { Status } from "./helpers";
 
-// Collection names - using users/{userId}/habits pattern to match tasks
-const HISTORY_COLLECTION = "habitHistory";
-const TODOS_COLLECTION = "todos";
-
 /**
  * Save habits to Firestore for a specific user
  * @param userId User ID

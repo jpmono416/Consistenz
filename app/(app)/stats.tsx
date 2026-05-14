@@ -33,7 +33,7 @@ const timeFormatter = new Intl.DateTimeFormat(undefined, {
 
 export default function StatsScreen() {
   const { completedTasks, signalTasks, noiseTasks } = useTasks();
-  const { habitHistory, habits } = useHabits();
+  const { habitHistory } = useHabits();
   const [viewMode, setViewMode] = useState<ViewMode>('side-by-side');
   const [expandedSection, setExpandedSection] = useState<ExpandedSection>(null);
   
@@ -271,8 +271,7 @@ export default function StatsScreen() {
             </View>
           </View>
           <View style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-end' }}>
-            {byDay.map((day, index) => {
-              const maxCount = Math.max(day.taskCount, day.habitCount);
+            {byDay.map((day) => {
               const totalCount = day.taskCount + day.habitCount;
               const baseHeight = 12;
               const taskHeight = day.taskCount === 0 ? 0 : baseHeight + day.taskCount * 12;
