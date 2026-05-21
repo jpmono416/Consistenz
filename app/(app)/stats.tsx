@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
-import { SafeAreaView, ScrollView, Text, View, Pressable, FlatList, ActivityIndicator, Switch } from 'react-native';
+import { SafeAreaView, ScrollView, Text, View, Pressable, ActivityIndicator, Switch } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { addMonths, format, subMonths, isSameMonth } from 'date-fns';
 import { getMonthDetails } from '@/utils/helpers';
@@ -553,7 +553,7 @@ function ExpandableBreakdownPill({
           />
         </View>
         {isExpanded && tasks !== undefined && (
-          <View style={{ width: '100%', marginTop: 12, maxHeight: maxHeight || 200 }}>
+          <View style={{ width: '100%', marginTop: 12, height: maxHeight || 200 }}>
             <TaskHistoryList tasks={tasks} />
           </View>
         )}
@@ -572,50 +572,49 @@ function TaskHistoryList({ tasks }: { tasks: Task[] }) {
   }
 
   return (
-    <FlatList
-      data={tasks}
-      scrollEnabled={true}
-      keyExtractor={(item) => item.id}
-      ItemSeparatorComponent={() => <View style={{ height: 6 }} />}
-      renderItem={({ item }) => (
-        <View
-          style={{
-            padding: 8,
-            borderRadius: 8,
-            backgroundColor: palette.surface,
-            borderWidth: 1,
-            borderColor: palette.border,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 8,
-          }}
-        >
+    <ScrollView style={{ flex: 1 }} nestedScrollEnabled showsVerticalScrollIndicator>
+      <View style={{ gap: 6 }}>
+        {tasks.map((item) => (
           <View
+            key={item.id}
             style={{
-              width: 24,
-              height: 24,
-              borderRadius: 6,
-              backgroundColor: item.priority === 'signal' ? palette.signal : palette.noise,
+              padding: 8,
+              borderRadius: 8,
+              backgroundColor: palette.surface,
+              borderWidth: 1,
+              borderColor: palette.border,
+              flexDirection: 'row',
               alignItems: 'center',
-              justifyContent: 'center',
+              gap: 8,
             }}
           >
-            <Text style={{ color: palette.background, fontWeight: '700', fontSize: 11 }}>
-              {item.priority === 'signal' ? 'S' : 'N'}
-            </Text>
+            <View
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: 6,
+                backgroundColor: item.priority === 'signal' ? palette.signal : palette.noise,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text style={{ color: palette.background, fontWeight: '700', fontSize: 11 }}>
+                {item.priority === 'signal' ? 'S' : 'N'}
+              </Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: palette.textPrimary, fontWeight: '600', fontSize: 12 }} numberOfLines={1}>
+                {item.title}
+              </Text>
+              <Text style={{ color: palette.textSecondary, marginTop: 2, fontSize: 10 }}>
+                {item.completedAt
+                  ? `${dateFormatter.format(item.completedAt)} at ${timeFormatter.format(item.completedAt)}`
+                  : 'Completion time unknown'}
+              </Text>
+            </View>
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: palette.textPrimary, fontWeight: '600', fontSize: 12 }} numberOfLines={1}>
-              {item.title}
-            </Text>
-            <Text style={{ color: palette.textSecondary, marginTop: 2, fontSize: 10 }}>
-              {item.completedAt
-                ? `${dateFormatter.format(item.completedAt)} at ${timeFormatter.format(item.completedAt)}`
-                : 'Completion time unknown'}
-            </Text>
-          </View>
-        </View>
-      )}
-    />
+        ))}
+      </View>
+    </ScrollView>
   );
 }

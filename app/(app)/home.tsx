@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useRef } from 'react';
-import { ScrollView, Text, View, SafeAreaView, Pressable, useWindowDimensions, FlatList, StyleSheet, Modal } from 'react-native';
+import { Text, View, SafeAreaView, Pressable, useWindowDimensions, FlatList, StyleSheet, Modal } from 'react-native';
+import { ScrollView } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
 import { format, isToday } from 'date-fns';
 import Svg, { Defs, LinearGradient as SvgGradient, Stop, Rect, Path } from 'react-native-svg';
@@ -259,7 +260,11 @@ export default function HomeScreen() {
     <GestureHandlerRootView style={{ flex: 1 }}>
     <View ref={rootRef} style={{ flex: 1 }} onLayout={measureRootOffset}>
     <SafeAreaView style={{ flex: 1, backgroundColor: palette.background }}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: 140 }}
+        nestedScrollEnabled
+        keyboardShouldPersistTaps="handled"
+      >
         {/* Header */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingBottom: 12 }}>
           <View>

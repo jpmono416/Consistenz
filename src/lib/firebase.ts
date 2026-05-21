@@ -1,6 +1,8 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getAuth, initializeAuth, Auth, Persistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
@@ -25,6 +27,24 @@ function ensureConfig(): Required<typeof firebaseConfig> {
 const app: FirebaseApp =
   getApps().length > 0 ? getApps()[0] : initializeApp(ensureConfig());
 
-export const auth = getAuth(app);
-export const db = getFirestore(app);
+function createAuth(): Auth {
+  if (Platform.OS === 'web') {
+    return getAuth(app);
+  }
 
+  // Metro resolves firebase/auth to the React Native build at runtime.
+  const { getReactNativePersistence } = require('firebase/auth') as {
+    getReactNativePersistence: (storage: typeof AsyncStorage) => Persistence;
+  };
+
+  try {
+    return initializeAuth(app, {
+      persistence: getReactNativePersistence(AsyncStorage),
+    });
+  } catch {
+    return getAuth(app);
+  }
+}
+
+export const auth = createAuth();
+export const db = getFirestore(app);

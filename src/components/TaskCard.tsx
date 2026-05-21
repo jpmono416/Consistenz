@@ -102,6 +102,9 @@ export const TaskCard = memo(({
   // completion / swap / delete) and also makes the drag intent explicit.
   const panGesture = Gesture.Pan()
     .activateAfterLongPress(250)
+    // Let the parent ScrollView handle vertical swipes; drag between columns is horizontal.
+    .failOffsetY([-12, 12])
+    .activeOffsetX([-16, 16])
     .onStart((event) => {
       'worklet';
       scale.value = withSpring(1.05);

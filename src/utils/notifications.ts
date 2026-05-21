@@ -1,35 +1,50 @@
-import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import { isRunningInExpoGo } from 'expo';
 import { format } from 'date-fns';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { Habit } from './storage';
 import { loadHabitsFromFirestore, loadHistoryFromFirestore } from './firestore';
 
-// Configure notification behavior
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+/** Local notifications are unavailable in Expo Go (SDK 53+) and on web. */
+export const notificationsSupported = Platform.OS !== 'web' && !isRunningInExpoGo();
 
 const TASKS_NOTIFICATION_ID = 'daily-tasks-3pm';
 const HABITS_NOTIFICATION_ID = 'daily-habits-7pm';
+
+type NotificationsModule = typeof import('expo-notifications');
+
+async function loadNotifications(): Promise<NotificationsModule | null> {
+  if (!notificationsSupported) return null;
+  return import('expo-notifications');
+}
+
+async function configureNotificationHandler(): Promise<void> {
+  const Notifications = await loadNotifications();
+  if (!Notifications) return;
+
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
+  });
+}
 
 /**
  * Request notification permissions
  */
 export async function requestNotificationPermissions(): Promise<boolean> {
-  // Scheduling/permissioning of local notifications is not supported on web
-  // and can throw at runtime. Bail out gracefully so logging in on web works.
-  if (Platform.OS === 'web') {
+  if (!notificationsSupported) {
     return false;
   }
 
   try {
+    const Notifications = await loadNotifications();
+    if (!Notifications) return false;
+
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
 
@@ -43,7 +58,6 @@ export async function requestNotificationPermissions(): Promise<boolean> {
       return false;
     }
 
-    // Configure Android channel for notifications
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('default', {
         name: 'Default',
@@ -94,20 +108,17 @@ async function checkIncompleteHabitsToday(userId: string): Promise<number> {
     let incompleteCount = 0;
 
     for (const habit of activeHabits) {
-      // Check if habit is required today
       const isRequired = !habit.frequency || habit.frequency.includes(weekday);
       if (!isRequired) continue;
 
-      // Check if habit is completed today
       const dayRecord = history[todayKey] || {};
       const habitRecord = dayRecord[habit.id];
-      
+
       if (!habitRecord) {
-        // No record means not completed
         incompleteCount++;
       } else {
-        const taps = typeof habitRecord === 'number' 
-          ? habitRecord 
+        const taps = typeof habitRecord === 'number'
+          ? habitRecord
           : habitRecord.taps || 0;
         if (taps < habit.tapsNeeded) {
           incompleteCount++;
@@ -126,6 +137,9 @@ async function checkIncompleteHabitsToday(userId: string): Promise<number> {
  * Schedule daily notification for Signal tasks at 3pm
  */
 export async function scheduleTasksNotification(userId: string): Promise<void> {
+  const Notifications = await loadNotifications();
+  if (!Notifications) return;
+
   try {
     await Notifications.cancelScheduledNotificationAsync(TASKS_NOTIFICATION_ID);
 
@@ -151,6 +165,9 @@ export async function scheduleTasksNotification(userId: string): Promise<void> {
  * Schedule daily notification for habits at 7pm
  */
 export async function scheduleHabitsNotification(userId: string): Promise<void> {
+  const Notifications = await loadNotifications();
+  if (!Notifications) return;
+
   try {
     await Notifications.cancelScheduledNotificationAsync(HABITS_NOTIFICATION_ID);
 
@@ -176,65 +193,69 @@ export async function scheduleHabitsNotification(userId: string): Promise<void> 
  * Setup notification handlers that check data and update notifications
  */
 export function setupNotificationHandlers(userId: string): () => void {
-  if (Platform.OS === 'web') {
+  if (!notificationsSupported) {
     return () => {};
   }
 
-  const receivedSubscription = Notifications.addNotificationReceivedListener(
-    async (notification) => {
-      const { type } = notification.request.content.data as { type: string; userId: string };
-      
-      if (type === 'tasks') {
-        const count = await checkUncompletedSignalTasks(userId);
-        if (count === 0) {
-          // Dismiss the notification if no tasks
-          await Notifications.dismissNotificationAsync(notification.request.identifier);
-        } else {
-          // Show a new notification with the actual count
-          await Notifications.scheduleNotificationAsync({
-            content: {
-              title: 'Signal Tasks Reminder',
-              body: `You have ${count} uncompleted Signal task${count > 1 ? 's' : ''}`,
-              data: { type: 'tasks', userId },
-            },
-            trigger: null, // Show immediately
-          });
-          // Dismiss the generic one
-          await Notifications.dismissNotificationAsync(notification.request.identifier);
-        }
-      } else if (type === 'habits') {
-        const count = await checkIncompleteHabitsToday(userId);
-        if (count === 0) {
-          // Dismiss the notification if no incomplete habits
-          await Notifications.dismissNotificationAsync(notification.request.identifier);
-        } else {
-          // Show a new notification with the actual count
-          await Notifications.scheduleNotificationAsync({
-            content: {
-              title: 'Habits Reminder',
-              body: `You have ${count} habit${count > 1 ? 's' : ''} to complete today`,
-              data: { type: 'habits', userId },
-            },
-            trigger: null, // Show immediately
-          });
-          // Dismiss the generic one
-          await Notifications.dismissNotificationAsync(notification.request.identifier);
+  let subscription: { remove: () => void } | null = null;
+
+  void loadNotifications().then((Notifications) => {
+    if (!Notifications) return;
+
+    subscription = Notifications.addNotificationReceivedListener(
+      async (notification) => {
+        const { type } = notification.request.content.data as { type: string; userId: string };
+
+        if (type === 'tasks') {
+          const count = await checkUncompletedSignalTasks(userId);
+          if (count === 0) {
+            await Notifications.dismissNotificationAsync(notification.request.identifier);
+          } else {
+            await Notifications.scheduleNotificationAsync({
+              content: {
+                title: 'Signal Tasks Reminder',
+                body: `You have ${count} uncompleted Signal task${count > 1 ? 's' : ''}`,
+                data: { type: 'tasks', userId },
+              },
+              trigger: null,
+            });
+            await Notifications.dismissNotificationAsync(notification.request.identifier);
+          }
+        } else if (type === 'habits') {
+          const count = await checkIncompleteHabitsToday(userId);
+          if (count === 0) {
+            await Notifications.dismissNotificationAsync(notification.request.identifier);
+          } else {
+            await Notifications.scheduleNotificationAsync({
+              content: {
+                title: 'Habits Reminder',
+                body: `You have ${count} habit${count > 1 ? 's' : ''} to complete today`,
+                data: { type: 'habits', userId },
+              },
+              trigger: null,
+            });
+            await Notifications.dismissNotificationAsync(notification.request.identifier);
+          }
         }
       }
-    }
-  );
+    );
+  });
 
-  // Return cleanup function
   return () => {
-    receivedSubscription.remove();
+    subscription?.remove();
   };
 }
 
 /**
  * Initialize all notifications for a user
- * Note: setupNotificationHandlers should be called separately to properly manage cleanup
  */
 export async function initializeNotifications(userId: string): Promise<void> {
+  if (!notificationsSupported) {
+    return;
+  }
+
+  await configureNotificationHandler();
+
   const hasPermission = await requestNotificationPermissions();
   if (!hasPermission) {
     console.warn('Cannot initialize notifications: permissions not granted');
@@ -243,14 +264,15 @@ export async function initializeNotifications(userId: string): Promise<void> {
 
   await scheduleTasksNotification(userId);
   await scheduleHabitsNotification(userId);
-  // Note: setupNotificationHandlers is called separately in the component to manage cleanup properly
 }
 
 /**
  * Cancel all scheduled notifications
  */
 export async function cancelAllNotifications(): Promise<void> {
-  if (Platform.OS === 'web') return;
+  const Notifications = await loadNotifications();
+  if (!Notifications) return;
+
   try {
     await Notifications.cancelScheduledNotificationAsync(TASKS_NOTIFICATION_ID);
   } catch {
@@ -262,4 +284,3 @@ export async function cancelAllNotifications(): Promise<void> {
     // notification may not exist — safe to ignore
   }
 }
-

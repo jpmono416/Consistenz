@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { FlatList, View, Text, StyleSheet, Pressable, Alert, Switch, Modal, ScrollView } from "react-native";
+import { View, Text, StyleSheet, Pressable, Alert, Switch, Modal, ScrollView } from "react-native";
 import { Habit, loadHabits, saveHabits } from '@/utils/storage';
 import { getCurrentUserId } from '@/utils/auth';
 import { saveHistoryToFirestore } from '@/utils/firestore';
 import { doc, setDoc, getDoc } from "firebase/firestore";
 import { db } from '@/lib/firebase';
-import { v4 as uuid } from "uuid";
+import * as Crypto from 'expo-crypto';
 import HabitForm from '@/components/HabitForm';
 import BackButton from '@/components/BackButton';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,7 +22,7 @@ export default function ManageHabitsScreen() {
     useEffect(() => {
         // load habits, ensure order field, then sort
         loadHabits().then(list => {
-            const init = list.map((h, idx) => ({ order: idx, ...h } as Habit));
+            const init = list.map((h, idx) => ({ ...h, order: h.order ?? idx } as Habit));
             init.sort((a,b) => (a.order || 0) - (b.order || 0));
             setHabits(init);
         });
@@ -31,7 +31,7 @@ export default function ManageHabitsScreen() {
     async function addHabit(habitData: Omit<Habit, "id" | "tapsToday" | "isActive">) {
         const nextOrder = habits.length ? Math.max(...habits.map(h => h.order || 0)) + 1 : 0;
         const newHabit: Habit = {
-            id: uuid(),
+            id: Crypto.randomUUID(),
             ...habitData,
             isActive: true,
             tapsToday: 0,
@@ -76,28 +76,6 @@ export default function ManageHabitsScreen() {
         setIsModalVisible(true);
     }
 
-    /* render row*/
-    const renderItem = ({ item }: { item: Habit }) => (
-        <View style={styles.row}>
-            <Text style={{ fontSize: 24 }}>{item.emoji}</Text>
-            <Text style={styles.habitName}>{item.name}</Text>
-            {/* Reorder buttons */}
-            <Pressable onPress={() => reorder(item.id, -1)} disabled={(item.order||0)===0} style={{ padding:3 }}>
-                <Text>⬆️</Text>
-            </Pressable>
-            <Pressable onPress={() => reorder(item.id, 1)} disabled={(item.order||0)===habits.length-1} style={{ padding:3 }}>
-                <Text>⬇️</Text>
-            </Pressable>
-            <Pressable onPress={() => openEditModal(item)} style={{ padding: 6}}>
-                <Text>✏️</Text>
-            </Pressable>
-            <Pressable onPress={() => deleteHabit(item.id)} style={{ padding: 6 }}>
-                <Text>🗑️</Text>
-            </Pressable>
-            <Switch value={item.isActive} onValueChange={() => toggleActive(item.id)} />
-        </View>
-    );
-
     async function reorder(id: string, dir: number) {
         const idx = habits.findIndex(h => h.id === id);
         const target = idx + dir;
@@ -123,13 +101,30 @@ export default function ManageHabitsScreen() {
             />
 
             <Text style={styles.title}>Existing Habits</Text>
-            <View style={{ height: 300 }}> {/* fixed height for nested scroll */}
-              <FlatList
-                data={habits}
-                keyExtractor={h => h.id}
-                renderItem={renderItem}
-                nestedScrollEnabled
-              />
+            <View style={{ gap: 6, marginBottom: 12 }}>
+              {habits.map((item) => (
+                <View key={item.id} style={styles.row}>
+                  <Text style={{ fontSize: 24 }}>{item.emoji}</Text>
+                  <Text style={styles.habitName}>{item.name}</Text>
+                  <Pressable onPress={() => reorder(item.id, -1)} disabled={(item.order ?? 0) === 0} style={{ padding: 3 }}>
+                    <Text>⬆️</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => reorder(item.id, 1)}
+                    disabled={(item.order ?? 0) === habits.length - 1}
+                    style={{ padding: 3 }}
+                  >
+                    <Text>⬇️</Text>
+                  </Pressable>
+                  <Pressable onPress={() => openEditModal(item)} style={{ padding: 6 }}>
+                    <Text>✏️</Text>
+                  </Pressable>
+                  <Pressable onPress={() => deleteHabit(item.id)} style={{ padding: 6 }}>
+                    <Text>🗑️</Text>
+                  </Pressable>
+                  <Switch value={item.isActive} onValueChange={() => toggleActive(item.id)} />
+                </View>
+              ))}
             </View>
 
             {/* Buttons to save/load habit data */}
@@ -269,8 +264,8 @@ export default function ManageHabitsScreen() {
                     </View>
                 </View>
             </Modal>
-            <BackButton style={styles.fabLeft} />
           </ScrollView>
+          <BackButton style={styles.fabLeft} />
         </SafeAreaView>
     );
 }
