@@ -1,12 +1,11 @@
 import { useState, useCallback, useMemo, useRef } from 'react';
-import { Text, View, SafeAreaView, Pressable, useWindowDimensions, FlatList, StyleSheet, Modal } from 'react-native';
+import { Text, View, Pressable, useWindowDimensions, FlatList, StyleSheet, Modal } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { format, isToday } from 'date-fns';
 import Svg, { Defs, LinearGradient as SvgGradient, Stop, Rect, Path } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-
 import { TaskColumn } from '@/components/TaskColumn';
 import { TaskComposer } from '@/components/TaskComposer';
 import { useAuth } from '@/context/AuthContext';
@@ -257,9 +256,8 @@ export default function HomeScreen() {
     : habitsForDate;
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
     <View ref={rootRef} style={{ flex: 1 }} onLayout={measureRootOffset}>
-    <SafeAreaView style={{ flex: 1, backgroundColor: palette.background }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: palette.background }} edges={['top']}>
       <ScrollView
         contentContainerStyle={{ paddingBottom: 140 }}
         nestedScrollEnabled
@@ -483,7 +481,6 @@ export default function HomeScreen() {
       </Pressable>
     </SafeAreaView>
     </View>
-    </GestureHandlerRootView>
   );
 }
 

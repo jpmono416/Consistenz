@@ -1,4 +1,5 @@
-import { FlatList, SafeAreaView, Text, View } from 'react-native';
+import { FlatList, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useTasks } from '@/context/TaskContext';
 import { palette } from '@/theme';
@@ -17,7 +18,7 @@ export default function HistoryScreen() {
   const { completedTasks } = useTasks();
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: palette.background }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: palette.background }} edges={['top']}>
       <View style={{ flex: 1, padding: 20, gap: 16 }}>
         <View>
           <Text style={{ color: palette.textSecondary, fontSize: 14 }}>History</Text>

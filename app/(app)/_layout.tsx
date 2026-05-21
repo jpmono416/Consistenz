@@ -8,12 +8,7 @@ export default function AppLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: {
-          backgroundColor: palette.surface,
-          borderTopColor: 'transparent',
-          paddingTop: 8,
-          height: 72,
-        },
+        tabBarStyle: { display: 'none' },
         tabBarActiveTintColor: palette.signal,
         tabBarInactiveTintColor: palette.textSecondary,
         tabBarLabelStyle: { fontWeight: '600', fontSize: 12 },
@@ -29,8 +24,7 @@ export default function AppLayout() {
       <Tabs.Screen
         name="history"
         options={{
-          title: 'History',
-          tabBarIcon: ({ color, size }) => <Feather name="clock" color={color} size={size} />,
+          href: null,
         }}
       />
       <Tabs.Screen
@@ -43,8 +37,7 @@ export default function AppLayout() {
       <Tabs.Screen
         name="habit-tracker"
         options={{
-          title: 'Habits',
-          tabBarIcon: ({ color, size }) => <Feather name="activity" color={color} size={size} />,
+          href: null,
         }}
       />
       <Tabs.Screen

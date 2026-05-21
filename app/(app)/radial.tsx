@@ -1,4 +1,5 @@
-import {StyleSheet, ActivityIndicator, ScrollView, Text, View, SafeAreaView, Button, Switch, Pressable} from 'react-native';
+import {StyleSheet, ActivityIndicator, ScrollView, Text, View, Button, Switch, Pressable} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {useRouter} from "expo-router";
 import {useEffect, useState} from "react";
 import {addMonths, format, subMonths, isSameMonth} from "date-fns";

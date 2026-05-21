@@ -1,6 +1,7 @@
 import { Redirect } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/context/AuthContext';
 import { palette } from '@/theme';
@@ -32,8 +33,9 @@ export default function AuthScreen() {
   };
 
   return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: palette.background }} edges={['top']}>
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: palette.background }}
+      style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
@@ -100,6 +102,7 @@ export default function AuthScreen() {
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 

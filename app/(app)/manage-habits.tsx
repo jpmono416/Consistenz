@@ -91,7 +91,7 @@ export default function ManageHabitsScreen() {
     }
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={styles.container} edges={['top']}>
           <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
 
             <Text style={styles.title}>Add Habit</Text>

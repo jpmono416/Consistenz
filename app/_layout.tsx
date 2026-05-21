@@ -3,6 +3,8 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ReactNode, useEffect, useRef } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '../src/hooks/use-color-scheme';
@@ -83,8 +85,12 @@ function RouterStack() {
 
 export default function RootLayout() {
   return (
-    <Providers>
-      <RouterStack />
-    </Providers>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <Providers>
+          <RouterStack />
+        </Providers>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

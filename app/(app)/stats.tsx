@@ -1,5 +1,7 @@
-import { useMemo, useState, useEffect } from 'react';
-import { SafeAreaView, ScrollView, Text, View, Pressable, ActivityIndicator, Switch } from 'react-native';
+import { useMemo, useState, useEffect, useCallback } from 'react';
+import { Text, View, Pressable, ActivityIndicator, Switch, Alert, StyleSheet } from 'react-native';
+import { ScrollView } from 'react-native-gesture-handler';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { addMonths, format, subMonths, isSameMonth } from 'date-fns';
 import { getMonthDetails } from '@/utils/helpers';
@@ -9,6 +11,7 @@ import { getCurrentUserId } from '@/utils/auth';
 import { loadHistoryFromFirestore, saveHistoryToFirestore } from '@/utils/firestore';
 import { Habit } from '@/utils/storage';
 import HabitVinyl from '@/components/HabitVinyl';
+import BackButton from '@/components/BackButton';
 
 import { useTasks } from '@/context/TaskContext';
 import { useHabits } from '@/context/HabitContext';
@@ -19,7 +22,7 @@ const daysBack = 7;
 const MAX_HISTORY_HEIGHT = 200; // Maximum height for history lists
 
 type ViewMode = 'side-by-side' | 'stacked';
-type ExpandedSection = 'signal' | 'noise' | 'total' | null;
+type ExpandedSection = 'signal' | 'noise' | null;
 
 const dateFormatter = new Intl.DateTimeFormat(undefined, {
   month: 'short',
@@ -32,9 +35,19 @@ const timeFormatter = new Intl.DateTimeFormat(undefined, {
 });
 
 export default function StatsScreen() {
-  const { completedTasks, signalTasks, noiseTasks } = useTasks();
+  const { completedTasks, signalTasks, noiseTasks, toggleCompleted } = useTasks();
+
+  const handleUncompleteTask = useCallback(
+    (taskId: string) => {
+      Alert.alert('Uncomplete task', 'Would you like to mark this as uncompleted?', [
+        { text: 'No', style: 'cancel' },
+        { text: 'Yes', onPress: () => toggleCompleted(taskId) },
+      ]);
+    },
+    [toggleCompleted],
+  );
   const { habitHistory } = useHabits();
-  const [viewMode, setViewMode] = useState<ViewMode>('side-by-side');
+  const [viewMode, setViewMode] = useState<ViewMode>('stacked');
   const [expandedSection, setExpandedSection] = useState<ExpandedSection>(null);
   
   // Radial view state
@@ -42,7 +55,7 @@ export default function StatsScreen() {
   const [radialHabits, setRadialHabits] = useState<Habit[]>([]);
   const [allData, setAllData] = useState<Record<string, any>>({});
   const [radialLoading, setRadialLoading] = useState(true);
-  const [useHabitColorForDone, setUseHabitColorForDone] = useState(false);
+  const [useHabitColorForDone, setUseHabitColorForDone] = useState(true);
 
   const { monthKey, daysInMonth } = getMonthDetails(currentDate);
 
@@ -167,11 +180,11 @@ export default function StatsScreen() {
   const atCurrentMonth = isSameMonth(currentDate, new Date());
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: palette.background }}>
-      <ScrollView contentContainerStyle={{ padding: 20, gap: 20 }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: palette.background }} edges={['top']}>
+      <ScrollView nestedScrollEnabled contentContainerStyle={{ padding: 20, paddingBottom: 100, gap: 20 }}>
         <View>
           <Text style={{ color: palette.textSecondary, fontSize: 14 }}>Insights</Text>
-          <Text style={{ color: palette.textPrimary, fontSize: 26, fontWeight: '800' }}>Signal vs Noise</Text>
+          <Text style={{ color: palette.textPrimary, fontSize: 26, fontWeight: '800' }}>Your progress</Text>
         </View>
 
         <View style={{ flexDirection: 'row', gap: 16 }}>
@@ -203,6 +216,7 @@ export default function StatsScreen() {
               onPress={() => setExpandedSection(expandedSection === null ? 'signal' : null)}
               tasks={expandedSection !== null ? signalTasksHistory : undefined}
               maxHeight={MAX_HISTORY_HEIGHT}
+              onTaskPress={handleUncompleteTask}
             />
             <ExpandableBreakdownPill
               label="Noise"
@@ -212,15 +226,7 @@ export default function StatsScreen() {
               onPress={() => setExpandedSection(expandedSection === null ? 'noise' : null)}
               tasks={expandedSection !== null ? noiseTasksHistory : undefined}
               maxHeight={MAX_HISTORY_HEIGHT}
-            />
-            <ExpandableBreakdownPill
-              label="Total"
-              value={totalCompleted}
-              color={palette.accent}
-              isExpanded={expandedSection !== null}
-              onPress={() => setExpandedSection(expandedSection === null ? 'total' : null)}
-              tasks={expandedSection !== null ? completedTasks : undefined}
-              maxHeight={MAX_HISTORY_HEIGHT}
+              onTaskPress={handleUncompleteTask}
             />
           </View>
         </View>
@@ -477,9 +483,21 @@ export default function StatsScreen() {
           )}
         </View>
       </ScrollView>
+      <BackButton style={styles.fabLeft} />
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  fabLeft: {
+    position: 'absolute',
+    bottom: 30,
+    left: 30,
+    borderRadius: 30,
+    overflow: 'hidden',
+    padding: 0,
+  },
+});
 
 function StatCard({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
@@ -509,6 +527,7 @@ function ExpandableBreakdownPill({
   onPress,
   tasks,
   maxHeight,
+  onTaskPress,
 }: {
   label: string;
   value: number;
@@ -517,6 +536,7 @@ function ExpandableBreakdownPill({
   onPress: () => void;
   tasks?: Task[];
   maxHeight?: number;
+  onTaskPress: (taskId: string) => void;
 }) {
   return (
     <View style={{ flex: 1, gap: 8 }}>
@@ -552,17 +572,17 @@ function ExpandableBreakdownPill({
             color={palette.textSecondary}
           />
         </View>
-        {isExpanded && tasks !== undefined && (
-          <View style={{ width: '100%', marginTop: 12, height: maxHeight || 200 }}>
-            <TaskHistoryList tasks={tasks} />
-          </View>
-        )}
       </Pressable>
+      {isExpanded && tasks !== undefined && (
+        <View style={{ width: '100%', height: maxHeight || 200 }}>
+          <TaskHistoryList tasks={tasks} onTaskPress={onTaskPress} />
+        </View>
+      )}
     </View>
   );
 }
 
-function TaskHistoryList({ tasks }: { tasks: Task[] }) {
+function TaskHistoryList({ tasks, onTaskPress }: { tasks: Task[]; onTaskPress: (taskId: string) => void }) {
   if (tasks.length === 0) {
     return (
       <View style={{ padding: 12, alignItems: 'center' }}>
@@ -572,11 +592,17 @@ function TaskHistoryList({ tasks }: { tasks: Task[] }) {
   }
 
   return (
-    <ScrollView style={{ flex: 1 }} nestedScrollEnabled showsVerticalScrollIndicator>
+    <ScrollView
+      style={{ flex: 1 }}
+      nestedScrollEnabled
+      showsVerticalScrollIndicator
+      keyboardShouldPersistTaps="handled"
+    >
       <View style={{ gap: 6 }}>
         {tasks.map((item) => (
-          <View
+          <Pressable
             key={item.id}
+            onPress={() => onTaskPress(item.id)}
             style={{
               padding: 8,
               borderRadius: 8,
@@ -612,7 +638,7 @@ function TaskHistoryList({ tasks }: { tasks: Task[] }) {
                   : 'Completion time unknown'}
               </Text>
             </View>
-          </View>
+          </Pressable>
         ))}
       </View>
     </ScrollView>

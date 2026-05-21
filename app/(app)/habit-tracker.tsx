@@ -200,7 +200,7 @@ export default function HomeScreen() {
     const atToday = isToday(selectedDate);
     /* ---------- render ---------- */
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={styles.container} edges={['top']}>
             {/* DATE NAVIGATION */}
             <View style={styles.dateNavContainer}>
                 <Pressable onPress={handlePrevDay}>
